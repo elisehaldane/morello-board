@@ -1,0 +1,4 @@
+copy-in -s /tmp/pot/22.12/lib64/ -d /root/lib64
+set-attribute -A no-tmpfs -V ON
+set-attribute -A nullfs -V ON
+set-attribute -A zfs -V ON

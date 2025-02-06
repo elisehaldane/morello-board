@@ -1,0 +1,211 @@
+#!/bin/sh
+
+# PROVIDE: dsbd_lab_board
+# REQUIRE: NETWORKING LOGIN FILESYSTEM
+# BEFORE: securelevel
+
+# shellcheck disable=SC1091,SC2010,SC2034,SC2143,SC2223
+
+. /etc/rc.subr
+
+name="dsbd_lab_board"
+rcvar="dsbd_lab_board_enable"
+start_cmd="dsbd_lab_board_start"
+
+base_url="https://download.cheribsd.org/releases/arm64/aarch64c"
+
+configure_env() {
+    export PATH="$PATH:/usr/local64/bin"
+    export HOME=/root
+    export HOST_ID="${HOST_ID:-0}"
+    export RUNNER_PREFIX="${RUNNER_PREFIX:-dsbd-remote-lab}"
+    export RC_VERSION="${RC_VERSION:-1.0.0}"
+}
+
+configure_zfs() {
+    zfs mount -a
+    zpool upgrade zroot
+}
+
+bootstrap_pkg() {
+    pkg64 -N > /dev/null || pkg64 bootstrap -y 2>/dev/null
+    pkg64 install -y curl git pot 2>/dev/null
+}
+
+get_manifests() {
+    manifests="/usr/local/share/freebsd/MANIFESTS"
+    mkdir -p $manifests
+    releases=$(curl "${base_url}/" | grep -Eo "\w{1,}\.\w{1,}" | sort -u)
+
+    # Retrieve a set of CheriBSD releases
+    for release in $releases; do
+        curl -sS -C - "${base_url}/$release/ftp/MANIFEST" > "$manifests/arm64-aarch64c-$release-RELEASE"
+    done
+
+    echo "Fetched CheriBSD manifests"
+}
+
+configure_pot() {
+    if [ -z "$(ls -A "$HOME/pot")" ]; then
+        git -C "$HOME" clone "https://github.com/digicatapult/pot" --no-progress
+    fi
+    cd "$HOME/pot" || exit
+
+    # Copy to /usr/local64 for the hybrid ABI port
+    for dir in bin etc share; do
+        cp -fR ./$dir /usr/local64/
+    done
+
+    latest_release=$(echo "${releases}" | tail -n 1)
+    # Enable the virtual NIC, basic logging, and VNET isolation
+    echo "# pot configuration file
+POT_CACHE=/opt/pot/cache
+POT_EXTIF=re0
+POT_ISOLATE_VNET_POTS=true
+POT_EXTRA_MANIFEST_URL=${base_url}/${latest_release}/ftp/
+POT_LOG_FACILITY=local2" > /usr/local64/etc/pot/pot.conf
+
+    pot init
+
+    echo "Finished configuring Pot"
+}
+
+fetch_library() {
+    # Fetch additional libraries for each ABI
+    mkdir -p "/tmp/pot/${latest_release}/lib64/"
+    if [ -z "$(ls -A "/tmp/pot/${latest_release}/lib64/")" ]; then
+        curl -sS -C - "${base_url}/${latest_release}/ftp/lib64.txz" | \
+        tar xkf - -C "/tmp/pot/${latest_release}/lib64/"
+    fi
+
+    # Skip 22.xx as the relevant ABI here was only introduced afterwards
+    if [ "${latest_release##*"22."*}" ]; then
+        mkdir -p "/tmp/pot/${latest_release}/lib64cb/"
+        if [ -z "$(ls -A "/tmp/pot/${latest_release}/lib64cb/")" ]; then
+            curl -sS -C - "${base_url}/${latest_release}/ftp/lib64cb.txz" | \
+            tar xkf - -C "/tmp/pot/${latest_release}/lib64cb/"
+        fi
+    fi
+}
+
+generate_pair() {
+    flavours=$(ls -A /usr/local64/etc/pot/flavours | grep 'arm64-aarch64c')
+    if [ -z "${flavours}" ]; then
+        echo "Missing aarch64c flavours in /usr/local64/etc/pot/flavours"
+        exit 1
+    fi
+
+    safe_wording=$(echo "$latest_release" | sed -e 's/\./_/')
+    safe_release="arm64-aarch64c-${safe_wording}"
+    latest_flavour=$(echo "${flavours}" | tail -n 1)
+    if [ "${safe_release}" = "${latest_flavour}" ]; then
+        if [ -z "$(pot ls -p -q | grep -i "${safe_release}")" ]; then
+            # Create a safe, unmodified state for export
+            echo "Creating ${safe_release} master copy"
+            pot create -p "${safe_release}" \
+                -b "${latest_release}" \
+                -f "${latest_flavour}" \
+                -t single || exit 1
+            pot start -p "${safe_release}"
+            pot exec -p "${safe_release}" cp -R /root/lib64/usr/ /usr
+            if [ "${latest_release##*"22."*}" ]; then
+                pot exec -p "${safe_release}" cp -R /root/lib64cb/usr/ /usr
+            fi
+            pot exec -p "${safe_release}" rm -rdf /root/usr/
+            pot stop -p "${safe_release}"
+            pot snap -p "${safe_release}"
+        fi
+
+        if [ -z "$(pot ls -p -q | grep -i "sibling")" ]; then
+            # Create the copy
+            echo "Cloning ${safe_release} as 'sibling' for local deployment"
+            pot clone -p sibling -P "${safe_release}" || exit 1
+            pot start -p sibling
+            pot exec -p sibling pkg64 install -y bash curl git llvm-base node readline
+            pot stop -p sibling
+            pot snap -p sibling
+        fi
+    fi
+}
+
+configure_act() {
+    if [ -z "$(ls -A "$HOME/act-pot-cheribsd")" ]; then
+        git -C "$HOME" clone "https://github.com/digicatapult/act-pot-cheribsd" --no-progress
+    fi
+    cd "$HOME/act-pot-cheribsd" || exit
+    # Install runner scripts/flavours
+    ./install.sh
+
+    sysrc pot_enable="YES"
+    sysrc gh_actions_enable="YES"
+}
+
+destroy_jails() {
+    # Destroy unwanted jails/pots from the previous session
+    pots=$(pot ls -p -q | grep -i "$RUNNER_PREFIX" | awk '{ print length($0) " " $0; }' - | sort -r -n | cut -d ' ' -f 2- )
+    for clone in $pots; do
+        pot destroy -p "$clone" -F 2>/dev/null
+    done
+    rm -rdf "$HOME/act-pot-cheribsd/runners/*"
+}
+
+start_runners() {
+    count=$(pot ls -p -q | grep -ci "$RUNNER_PREFIX")
+    max_runners=3
+
+    . "$HOME/.profile"
+    cd "$HOME/act-pot-cheribsd" || exit
+
+    while [ "$count" -lt "$max_runners" ]; do
+        RUNNER_SUFFIX=$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
+        export RUNNER_NAME="$HOST_ID-$RUNNER_PREFIX-$RC_VERSION-$RUNNER_SUFFIX"
+
+        # Calculate the index for the next runner
+        next_runner=$((count + 1))
+
+        # Attempt to configure the runner
+        echo "Attempting to configure runner $next_runner: $RUNNER_NAME"
+        . get_token.sh
+        ./config.sh --url "https://github.com/${GITHUB_ORG}" --token "${GITHUB_TOKEN}"
+
+        # Update the count after the configuration attempt
+        new_count=$(pot ls -p -q | grep -ci "$RUNNER_PREFIX")
+
+        # Check if the new runner was successfully added
+        if [ "$new_count" -gt "$count" ]; then
+            echo "Runner no. $next_runner configured successfully."
+            count=$new_count
+        else
+            echo "Failed to configure runner no. $next_runner."
+            # Break the loop if a runner configuration fails to prevent infinite looping
+            break
+        fi
+    done
+
+    /etc/cron.d/dsbd-lab-restart-actions.sh
+}
+
+start_logging() {
+    echo "* 9 */1 * * /sbin/zpool status -v >> /var/log/zpool.log
+*/2 * * * * /usr/bin/lockf -t 0 /var/run/dsbd-lab-restart-actions.lock /etc/cron.d/dsbd-lab-restart-actions.sh >> /var/log/dsbd-lab-restart-actions.log" | \
+    crontab -
+    service cron onestart
+}
+
+dsbd_lab_board_start() {
+    configure_env
+    configure_zfs
+    bootstrap_pkg
+    get_manifests
+    configure_pot
+    fetch_library
+    generate_pair
+    configure_act
+    destroy_jails
+    start_runners
+    start_logging
+}
+
+load_rc_config $name
+: ${dsbd_lab_board_enable:=yes}
+run_rc_command "$@"
