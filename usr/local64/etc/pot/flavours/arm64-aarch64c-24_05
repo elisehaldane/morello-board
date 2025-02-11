@@ -1,5 +1,5 @@
-copy-in -s /tmp/pot/24.05/lib64/ -d /root/lib64
-copy-in -s /tmp/pot/24.05/lib64cb -d /root/lib64cb
+copy-in -s /tmp/pot/24.05/lib64/usr/lib64 -d /root/lib64
+copy-in -s /tmp/pot/24.05/lib64cb/usr/lib64cb -d /root/lib64cb
 set-attribute -A no-tmpfs -V ON
 set-attribute -A nullfs -V ON
 set-attribute -A zfs -V ON
