@@ -173,6 +173,9 @@ start_runners() {
         new_count=$(pot ls -p -q | grep -ci "$RUNNER_PREFIX")
 
         runner_api_url="https://api.github.com/orgs/${GITHUB_ORG}/actions/runners/${RUNNER_NAME}"
+        runner_api_headers=(-H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_PAT}" \
+            -H "X-GitHub-Api-Version: 2022-11-28")
 
         # Check if the new runner was successfully added
         if [ "$new_count" -gt "$count" ]; then
@@ -181,16 +184,18 @@ start_runners() {
 
             curl -sS -L -X POST \
                 --retry 5 --retry-connrefused --retry-delay 5 \
-                -H "Accept: application/vnd.github+json" \
-                -H "Authorization: Bearer ${GITHUB_PAT}" \
-                -H "X-GitHub-Api-Version: 2022-11-28" \
-                "$runner_api_url/labels" \
+                "$runner_api_headers[@]" "$runner_api_url/labels" \
                 -d '{"labels":["'"${RUNNER_PREFIX}","${RC_VERSION}"'"]}'
         else
             echo "Failed to configure runner no. $next_runner."
+
+            curl -sS -L -X DELETE \
+                "$runner_api_headers[@]" "$runner_api_url"
+
             # Break the loop if a runner configuration fails to prevent infinite looping
             break
         fi
+        unset runner_api_url runner_api_headers
     done
 
     /etc/cron.d/dsbd-lab-restart-actions.sh
