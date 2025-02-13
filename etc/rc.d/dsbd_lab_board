@@ -172,12 +172,13 @@ start_runners() {
         # Update the count after the configuration attempt
         new_count=$(pot ls -p -q | grep -ci "$RUNNER_PREFIX")
 
+        runner_api_url="https://api.github.com/orgs/${GITHUB_ORG}/actions/runners/${RUNNER_NAME}"
+
         # Check if the new runner was successfully added
         if [ "$new_count" -gt "$count" ]; then
             echo "Runner no. $next_runner configured successfully."
             count=$new_count
 
-            runner_api_url="https://api.github.com/orgs/${GITHUB_ORG}/actions/runners/${RUNNER_NAME}"
             curl -sS -L -X POST \
                 --retry 5 --retry-connrefused --retry-delay 5 \
                 -H "Accept: application/vnd.github+json" \
