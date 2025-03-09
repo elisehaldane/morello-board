@@ -47,7 +47,7 @@ get_manifests() {
 
 configure_pot() {
     if [ -z "$(ls -A "$HOME/pot")" ]; then
-        git -C "$HOME" clone "https://github.com/digicatapult/pot" --no-progress
+        git -C "$HOME" clone "https://github.com/dc-dsbd/dsbd-pot" --no-progress
     fi
     cd "$HOME/pot" || exit
 
@@ -131,7 +131,7 @@ generate_pair() {
 
 configure_act() {
     if [ -z "$(ls -A "$HOME/act-pot-cheribsd")" ]; then
-        git -C "$HOME" clone "https://github.com/digicatapult/act-pot-cheribsd" --no-progress
+        git -C "$HOME" clone "https://github.com/dc-dsbd/dsbd-act" --no-progress
     fi
     cd "$HOME/act-pot-cheribsd" || exit
     # Install runner scripts/flavours
