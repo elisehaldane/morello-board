@@ -19,7 +19,7 @@ configure_env() {
     export HOME=/root
     export HOST_ID="${HOST_ID:-0}"
     export RUNNER_PREFIX="${RUNNER_PREFIX:-dsbd-remote-lab}"
-    export RC_VERSION="${RC_VERSION:-1.0.1}"
+    export RC_VERSION="${RC_VERSION:-1.0.2}"
 }
 
 configure_zfs() {
@@ -35,11 +35,11 @@ bootstrap_pkg() {
 get_manifests() {
     manifests="/usr/local/share/freebsd/MANIFESTS"
     mkdir -p $manifests
-    releases=$(curl "${base_url}/" | grep -Eo "\w{1,}\.\w{1,}" | sort -u)
+    releases=$(curl "$base_url/" | grep -Eo "\w{1,}\.\w{1,}" | sort -u)
 
     # Retrieve a set of CheriBSD releases
     for release in $releases; do
-        curl -sS -C - "${base_url}/$release/ftp/MANIFEST" > "$manifests/arm64-aarch64c-$release-RELEASE"
+        curl -sS -C - "$base_url/$release/ftp/MANIFEST" > "$manifests/arm64-aarch64c-$release-RELEASE"
     done
 
     echo "Fetched CheriBSD manifests"
@@ -56,13 +56,13 @@ configure_pot() {
         cp -fR ./$dir /usr/local64/
     done
 
-    latest_release=$(echo "${releases}" | tail -n 1)
+    latest_release=$(echo "$releases" | tail -n 1)
     # Enable the virtual NIC, basic logging, and VNET isolation
     echo "# pot configuration file
 POT_CACHE=/opt/pot/cache
 POT_EXTIF=re0
 POT_ISOLATE_VNET_POTS=true
-POT_EXTRA_MANIFEST_URL=${base_url}/${latest_release}/ftp/
+POT_EXTRA_MANIFEST_URL=$base_url/$latest_release/ftp/
 POT_LOG_FACILITY=local2" > /usr/local64/etc/pot/pot.conf
 
     pot init
@@ -72,55 +72,55 @@ POT_LOG_FACILITY=local2" > /usr/local64/etc/pot/pot.conf
 
 fetch_library() {
     # Fetch additional libraries for each ABI
-    mkdir -p "/tmp/pot/${latest_release}/lib64/"
-    if [ -z "$(ls -A "/tmp/pot/${latest_release}/lib64/")" ]; then
-        curl -sS -C - "${base_url}/${latest_release}/ftp/lib64.txz" | \
-        tar xkf - -C "/tmp/pot/${latest_release}/lib64/"
+    mkdir -p "/tmp/pot/$latest_release/lib64/"
+    if [ -z "$(ls -A "/tmp/pot/$latest_release/lib64/")" ]; then
+        curl -sS -C - "$base_url/$latest_release/ftp/lib64.txz" | \
+        tar xkf - -C "/tmp/pot/$latest_release/lib64/"
     fi
 
     # Skip 22.xx as the relevant ABI here was only introduced afterwards
     if [ "${latest_release##*"22."*}" ]; then
-        mkdir -p "/tmp/pot/${latest_release}/lib64cb/"
-        if [ -z "$(ls -A "/tmp/pot/${latest_release}/lib64cb/")" ]; then
-            curl -sS -C - "${base_url}/${latest_release}/ftp/lib64cb.txz" | \
-            tar xkf - -C "/tmp/pot/${latest_release}/lib64cb/"
+        mkdir -p "/tmp/pot/$latest_release/lib64cb/"
+        if [ -z "$(ls -A "/tmp/pot/$latest_release/lib64cb/")" ]; then
+            curl -sS -C - "$base_url/$latest_release/ftp/lib64cb.txz" | \
+            tar xkf - -C "/tmp/pot/$latest_release/lib64cb/"
         fi
     fi
 
-    chflags -R noschg "/tmp/pot/${latest_release}"
+    chflags -R noschg "/tmp/pot/$latest_release"
 }
 
 generate_pair() {
     flavours=$(ls -A /usr/local64/etc/pot/flavours | grep 'arm64-aarch64c')
-    if [ -z "${flavours}" ]; then
+    if [ -z "$flavours" ]; then
         echo "Missing aarch64c flavours in /usr/local64/etc/pot/flavours"
         exit 1
     fi
 
     safe_wording=$(echo "$latest_release" | sed -e 's/\./_/')
     safe_release="arm64-aarch64c-${safe_wording}"
-    latest_flavour=$(echo "${flavours}" | tail -n 1)
-    if [ "${safe_release}" = "${latest_flavour}" ]; then
-        if [ -z "$(pot ls -p -q | grep -i "${safe_release}")" ]; then
+    latest_flavour=$(echo "$flavours" | tail -n 1)
+    if [ "$safe_release" = "$latest_flavour" ]; then
+        if [ -z "$(pot ls -p -q | grep -i "$safe_release")" ]; then
             # Create a safe, unmodified state for export
-            echo "Creating ${safe_release} master copy"
-            pot create -p "${safe_release}" \
-                -b "${latest_release}" \
-                -f "${latest_flavour}" \
+            echo "Creating $safe_release master copy"
+            pot create -p "$safe_release" \
+                -b "$latest_release" \
+                -f "$latest_flavour" \
                 -t single || exit 1
-            pot start -p "${safe_release}"
-            pot exec -p "${safe_release}" cd /root/
-            pot exec -p "${safe_release}" pax -rw . /usr/
-            pot exec -p "${safe_release}" rm -rdf /root/lib64
-            pot exec -p "${safe_release}" rm -rdf /root/lib64cb
-            pot stop -p "${safe_release}"
-            pot snap -p "${safe_release}"
+            pot start -p "$safe_release"
+            pot exec -p "$safe_release" cd /root/
+            pot exec -p "$safe_release" pax -rw . /usr/
+            pot exec -p "$safe_release" rm -rdf /root/lib64
+            pot exec -p "$safe_release" rm -rdf /root/lib64cb
+            pot stop -p "$safe_release"
+            pot snap -p "$safe_release"
         fi
 
         if [ -z "$(pot ls -p -q | grep -i "sibling")" ]; then
             # Create the copy
-            echo "Cloning ${safe_release} as 'sibling' for local deployment"
-            pot clone -p sibling -P "${safe_release}" || exit 1
+            echo "Cloning $safe_release as 'sibling' for local deployment"
+            pot clone -p sibling -P "$safe_release" || exit 1
             pot start -p sibling
             pot exec -p sibling pkg64 install -y bash curl git llvm-base node readline
             pot stop -p sibling
@@ -167,7 +167,7 @@ start_runners() {
         # Attempt to configure the runner
         echo "Attempting to configure runner $next_runner: $RUNNER_NAME"
         . get_token.sh
-        ./config.sh --url "https://github.com/${GITHUB_ORG}" --token "${GITHUB_TOKEN}"
+        ./config.sh --url "https://github.com/$GITHUB_ORG" --token "$GITHUB_TOKEN"
 
         # Update the count after the configuration attempt
         new_count=$(pot ls -p -q | grep -ci "$RUNNER_PREFIX")
