@@ -14,7 +14,7 @@ jobs:
     - name: Install ShellCheck
       run: sudo apt-get install shellcheck
 
-    - name: Parse shell-scripts
+    - name: Parse shell scripts
       run: |
         files=$(find . -type f ! -path '*/\.*' -exec grep -lE '^#!(/usr)?/bin/(ba)?sh' {} +)
         if [ -n "$files" ]; then
