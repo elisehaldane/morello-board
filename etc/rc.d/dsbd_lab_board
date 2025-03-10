@@ -123,7 +123,7 @@ generate_pair() {
             echo "Cloning $safe_release as 'sibling' for local deployment"
             pot clone -p sibling -P "$safe_release" || exit 1
             pot start -p sibling
-            pot exec -p sibling pkg64 install -y bash curl git llvm-base node readline
+            pot exec -p sibling pkg64 install -y bash curl git llvm-base node readline 1>/dev/null
             pot stop -p sibling
             pot snap -p sibling
         fi
