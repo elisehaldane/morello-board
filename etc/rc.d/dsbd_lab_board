@@ -12,7 +12,11 @@ name="dsbd_lab_board"
 rcvar="dsbd_lab_board_enable"
 start_cmd="dsbd_lab_board_start"
 
-base_url="https://download.cheribsd.org/releases/arm64/aarch64c"
+host_cpu=$(uname -m | grep -Eo "arm64|riscv")
+host_architecture=$(uname -p | grep -Eo "aarch64c|riscv64c" || \
+    echo "Detected that the host is not a capability machine"; exit 1)
+safe_isa_path="$host_cpu-$host_architecture"
+base_url="https://download.cheribsd.org/releases/$host_cpu/$host_architecture"
 
 configure_env() {
     export PATH="$PATH:/usr/local64/bin"
@@ -20,7 +24,7 @@ configure_env() {
     export HOST_ID="${HOST_ID:-0}"
     export HOST_INTERFACE="${HOST_INTERFACE:-re0}"
     export RUNNER_PREFIX="${RUNNER_PREFIX:-dsbd-remote-lab}"
-    export RC_VERSION="${RC_VERSION:-1.0.2}"
+    export RC_VERSION="${RC_VERSION:-1.1.0}"
 }
 
 configure_zfs() {
@@ -40,7 +44,7 @@ get_manifests() {
 
     # Retrieve a set of CheriBSD releases
     for release in $releases; do
-        curl -sS -C - "$base_url/$release/ftp/MANIFEST" > "$manifests/arm64-aarch64c-$release-RELEASE"
+        curl -sS -C - "$base_url/$release/ftp/MANIFEST" > "$manifests/$safe_isa_path-$release-RELEASE"
     done
 
     echo "Fetched CheriBSD manifests"
@@ -79,12 +83,14 @@ fetch_library() {
         tar xkf - -C "/tmp/pot/$latest_release/lib64/"
     fi
 
-    # Skip 22.xx as the relevant ABI here was only introduced afterwards
-    if [ "${latest_release##*"22."*}" ]; then
-        mkdir -p "/tmp/pot/$latest_release/lib64cb/"
-        if [ -z "$(ls -A "/tmp/pot/$latest_release/lib64cb/")" ]; then
-            curl -sS -C - "$base_url/$latest_release/ftp/lib64cb.txz" | \
-            tar xkf - -C "/tmp/pot/$latest_release/lib64cb/"
+    # Skip 22.xx as the benchmark ABI for Morello was introduced after
+    if [ "$host_architecture" = "aarch64c" ]; then
+        if [ "${latest_release##*"22."*}" ]; then
+            mkdir -p "/tmp/pot/$latest_release/lib64cb/"
+            if [ -z "$(ls -A "/tmp/pot/$latest_release/lib64cb/")" ]; then
+                curl -sS -C - "$base_url/$latest_release/ftp/lib64cb.txz" | \
+                tar xkf - -C "/tmp/pot/$latest_release/lib64cb/"
+            fi
         fi
     fi
 
@@ -92,14 +98,14 @@ fetch_library() {
 }
 
 generate_pair() {
-    flavours=$(ls -A /usr/local64/etc/pot/flavours | grep 'arm64-aarch64c')
+    flavours=$(ls -A /usr/local64/etc/pot/flavours | grep "$safe_isa_path")
     if [ -z "$flavours" ]; then
-        echo "Missing aarch64c flavours in /usr/local64/etc/pot/flavours"
+        echo "Missing ISA flavours in /usr/local64/etc/pot/flavours"
         exit 1
     fi
 
-    safe_wording=$(echo "$latest_release" | sed -e 's/\./_/')
-    safe_release="arm64-aarch64c-${safe_wording}"
+    safe_release_name=$(echo "$latest_release" | sed -e 's/\./_/')
+    safe_release="$safe_isa_path-$safe_release_name"
     latest_flavour=$(echo "$flavours" | tail -n 1)
     if [ "$safe_release" = "$latest_flavour" ]; then
         if [ -z "$(pot ls -p -q | grep -i "$safe_release")" ]; then
