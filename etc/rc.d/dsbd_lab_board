@@ -24,7 +24,8 @@ configure_env() {
     export HOST_ID="${HOST_ID:-0}"
     export HOST_INTERFACE="${HOST_INTERFACE:-re0}"
     export RUNNER_PREFIX="${RUNNER_PREFIX:-dsbd-remote-lab}"
-    export RC_VERSION="${RC_VERSION:-1.1.0}"
+    export CHERIBSD_VERSION="${CHERIBSD_VERSION}"
+    export RC_VERSION="${RC_VERSION:-1.2.0}"
 }
 
 configure_zfs() {
@@ -40,11 +41,11 @@ bootstrap_pkg() {
 get_manifests() {
     manifests="/usr/local/share/freebsd/MANIFESTS"
     mkdir -p $manifests
-    releases=$(curl "$base_url/" | grep -Eo "\w{1,}\.\w{1,}" | sort -u)
+    bases=$(curl "$base_url/" | grep -Eo "\w{1,}\.\w{1,}" | sort -u)
 
     # Retrieve a set of CheriBSD releases
-    for release in $releases; do
-        curl -sS -C - "$base_url/$release/ftp/MANIFEST" > "$manifests/$safe_isa_path-$release-RELEASE"
+    for base in $bases; do
+        curl -sS -C - "$base_url/$base/ftp/MANIFEST" > "$manifests/$safe_isa_path-$base-RELEASE"
     done
 
     echo "Fetched CheriBSD manifests"
@@ -61,13 +62,13 @@ configure_pot() {
         cp -fR ./$dir /usr/local64/
     done
 
-    latest_release=$(echo "$releases" | tail -n 1)
+    release=${CHERIBSD_VERSION:-"$(echo "$bases" | tail -n 1)"}
     # Enable the virtual NIC, basic logging, and VNET isolation
     echo "# pot configuration file
 POT_CACHE=/opt/pot/cache
 POT_EXTIF=$HOST_INTERFACE
 POT_ISOLATE_VNET_POTS=true
-POT_EXTRA_MANIFEST_URL=$base_url/$latest_release/ftp/
+POT_EXTRA_MANIFEST_URL=$base_url/$release/ftp/
 POT_LOG_FACILITY=local2" > /usr/local64/etc/pot/pot.conf
 
     pot init
@@ -77,24 +78,24 @@ POT_LOG_FACILITY=local2" > /usr/local64/etc/pot/pot.conf
 
 fetch_library() {
     # Fetch additional libraries for each ABI
-    mkdir -p "/tmp/pot/$latest_release/lib64/"
-    if [ -z "$(ls -A "/tmp/pot/$latest_release/lib64/")" ]; then
-        curl -sS -C - "$base_url/$latest_release/ftp/lib64.txz" | \
-        tar xkf - -C "/tmp/pot/$latest_release/lib64/"
+    mkdir -p "/tmp/pot/$release/lib64/"
+    if [ -z "$(ls -A "/tmp/pot/$release/lib64/")" ]; then
+        curl -sS -C - "$base_url/$release/ftp/lib64.txz" | \
+        tar xkf - -C "/tmp/pot/$release/lib64/"
     fi
 
     # Skip 22.xx as the benchmark ABI for Morello was introduced after
     if [ "$host_architecture" = "aarch64c" ]; then
-        if [ "${latest_release##*"22."*}" ]; then
-            mkdir -p "/tmp/pot/$latest_release/lib64cb/"
-            if [ -z "$(ls -A "/tmp/pot/$latest_release/lib64cb/")" ]; then
-                curl -sS -C - "$base_url/$latest_release/ftp/lib64cb.txz" | \
-                tar xkf - -C "/tmp/pot/$latest_release/lib64cb/"
+        if [ "${release##*"22."*}" ]; then
+            mkdir -p "/tmp/pot/$release/lib64cb/"
+            if [ -z "$(ls -A "/tmp/pot/$release/lib64cb/")" ]; then
+                curl -sS -C - "$base_url/$release/ftp/lib64cb.txz" | \
+                tar xkf - -C "/tmp/pot/$release/lib64cb/"
             fi
         fi
     fi
 
-    chflags -R noschg "/tmp/pot/$latest_release"
+    chflags -R noschg "/tmp/pot/$release"
 }
 
 generate_pair() {
@@ -104,7 +105,7 @@ generate_pair() {
         exit 1
     fi
 
-    safe_release_name=$(echo "$latest_release" | sed -e 's/\./_/')
+    safe_release_name=$(echo "$release" | sed -e 's/\./_/')
     safe_release="$safe_isa_path-$safe_release_name"
     latest_flavour=$(echo "$flavours" | tail -n 1)
     if [ "$safe_release" = "$latest_flavour" ]; then
@@ -112,7 +113,7 @@ generate_pair() {
             # Create a safe, unmodified state for export
             echo "Creating $safe_release master copy"
             pot create -p "$safe_release" \
-                -b "$latest_release" \
+                -b "$release" \
                 -f "$latest_flavour" \
                 -t single || exit 1
             pot start -p "$safe_release"

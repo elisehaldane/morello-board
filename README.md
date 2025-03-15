@@ -29,6 +29,7 @@ Change `GITHUB_ORG` and `GITHUB_PAT` to their respective values.
 ```sh
 export GITHUB_ORG="$NAME"
 export GITHUB_PAT="$SECRET"
+export CHERIBSD_VERSION="24.05"
 pkg64 install git -y
 git clone https://github.com/dc-dsbd/dsbd-board-scripts
 cd ./dsbd-board-scripts
@@ -47,6 +48,7 @@ Pot uses a declarative model, inspired by OCI containers, where each jail can pu
 
 In addition to the GitHub variables mentioned earlier, others were introduced. What follows is a complete list:
 
+- `CHERIBSD_VERSION`: the required version of the FreeBSD fork
 - `GITHUB_ORG`: the organisation's name
 - `GITHUB_PAT`: a read/write GitHub token for organisation runners
 - `HOST_ID`: a label for the host, appears first in the runner name
@@ -54,7 +56,12 @@ In addition to the GitHub variables mentioned earlier, others were introduced. W
 - `RUNNER_PREFIX`: a prefix in the runner name, commonly a project ID
 - `RC_VERSION`: the script version, appears third in the runner name
 
-A runner name comprises four components: the `HOST_ID`, `RUNNER_PREFIX`, `RC_VERSION`, and then a suffix of random alphanumeric characters (the `RUNNER_SUFFIX`). To avoid collisions when the runner is created, the random suffix is the only part that the user cannot modify via the above variables.
+
+### Usage and caveats
+
+If left blank, then the CheriBSD version defaults to the latest available from the project's HTTP server: [download.cheribsd.org][cheribsd]. Where the latest version available is unknown or definitely ahead of what's in use on the machine, the user should instead provide the version that matches the host. To give an example, a CheriBSD 24.05 host (itself based on FreeBSD v15) ought to have jails older than or including that version.
+
+A runner name comprises four components: the `HOST_ID`, `RUNNER_PREFIX`, `RC_VERSION`, and then a suffix of random alphanumeric characters (the `RUNNER_SUFFIX`). To avoid collisions when the runner is created, the random suffix is the only part that the user cannot modify via the above variables. This project might have a runner named "prod-dsbd-remote-lab-1.2.0-H7sd3k1k", for example.
 
 
 ## Additional context
@@ -69,6 +76,7 @@ A runner name comprises four components: the `HOST_ID`, `RUNNER_PREFIX`, `RC_VER
 [archive]: https://web.archive.org/web/20250000000000*/https://dsbd.tech
 [arm]: https://developer.arm.com/documentation/den0132/0200/Overview
 [cambridge]: https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/
+[cheribsd]: https://download.cheribsd.org/
 [dsbd]: https://www.dsbd.tech/
 [github]: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token
 [self-hosted]: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security
