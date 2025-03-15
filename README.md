@@ -52,9 +52,9 @@ In addition to the GitHub variables mentioned earlier, others were introduced. W
 - `HOST_ID`: a label for the host, appears first in the runner name
 - `HOST_INTERFACE`: the host's ethernet interface ID
 - `RUNNER_PREFIX`: a prefix in the runner name, commonly a project ID
-- `RC_VERSION`: the script version, appears last in the runner name
+- `RC_VERSION`: the script version, appears third in the runner name
 
-A runner name comprises four components: the `HOST_ID`, `RUNNER_PREFIX`, a suffix of random alphanumeric characters (the `RUNNER_SUFFIX`), and the `RC_VERSION`. To avoid collisions when the runner is created, the random suffix is the only part that the user cannot modify via the above variables.
+A runner name comprises four components: the `HOST_ID`, `RUNNER_PREFIX`, `RC_VERSION`, and then a suffix of random alphanumeric characters (the `RUNNER_SUFFIX`). To avoid collisions when the runner is created, the random suffix is the only part that the user cannot modify via the above variables.
 
 
 ## Additional context
