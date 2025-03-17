@@ -25,7 +25,7 @@ configure_env() {
     export HOST_INTERFACE="${HOST_INTERFACE:-re0}"
     export RUNNER_PREFIX="${RUNNER_PREFIX:-dsbd-remote-lab}"
     export CHERIBSD_VERSION="${CHERIBSD_VERSION}"
-    export RC_VERSION="${RC_VERSION:-1.2.0}"
+    export RC_VERSION="${RC_VERSION:-1.2.1}"
 }
 
 configure_zfs() {
@@ -52,10 +52,10 @@ get_manifests() {
 }
 
 configure_pot() {
-    if [ -z "$(ls -A "$HOME/pot")" ]; then
+    if [ -z "$(ls -A "$HOME/dsbd-pot")" ]; then
         git -C "$HOME" clone "https://github.com/dc-dsbd/dsbd-pot" --no-progress
     fi
-    cd "$HOME/pot" || exit
+    cd "$HOME/dsbd-pot" || exit
 
     # Copy to /usr/local64 for the hybrid ABI port
     for dir in bin etc share; do
@@ -138,10 +138,10 @@ generate_pair() {
 }
 
 configure_act() {
-    if [ -z "$(ls -A "$HOME/act-pot-cheribsd")" ]; then
+    if [ -z "$(ls -A "$HOME/dsbd-act")" ]; then
         git -C "$HOME" clone "https://github.com/dc-dsbd/dsbd-act" --no-progress
     fi
-    cd "$HOME/act-pot-cheribsd" || exit
+    cd "$HOME/dsbd-act" || exit
     # Install runner scripts/flavours
     ./install.sh
 
@@ -155,7 +155,7 @@ destroy_jails() {
     for clone in $pots; do
         pot destroy -p "$clone" -F 2>/dev/null
     done
-    rm -rdf "$HOME/act-pot-cheribsd/runners/*"
+    rm -rdf "$HOME/dsbd-act/runners/*"
 }
 
 start_runners() {
@@ -163,7 +163,7 @@ start_runners() {
     max_runners=3
 
     . "$HOME/.profile"
-    cd "$HOME/act-pot-cheribsd" || exit
+    cd "$HOME/dsbd-act" || exit
 
     while [ "$count" -lt "$max_runners" ]; do
         RUNNER_SUFFIX=$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
