@@ -24,8 +24,9 @@ configure_env() {
     export HOST_ID="${HOST_ID:-0}"
     export HOST_INTERFACE="${HOST_INTERFACE:-re0}"
     export RUNNER_PREFIX="${RUNNER_PREFIX:-dsbd-remote-lab}"
+    export RUNNER_LIMIT="${RUNNER_LIMIT:-3}"
     export CHERIBSD_VERSION="${CHERIBSD_VERSION}"
-    export RC_VERSION="${RC_VERSION:-1.2.1}"
+    export RC_VERSION="${RC_VERSION:-1.2.2}"
 }
 
 configure_zfs() {
@@ -160,12 +161,11 @@ destroy_jails() {
 
 start_runners() {
     count=$(pot ls -p -q | grep -ci "$RUNNER_PREFIX")
-    max_runners=3
 
     . "$HOME/.profile"
     cd "$HOME/dsbd-act" || exit
 
-    while [ "$count" -lt "$max_runners" ]; do
+    while [ "$count" -lt "$RUNNER_LIMIT" ]; do
         RUNNER_SUFFIX=$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)
         export RUNNER_NAME="$HOST_ID-$RUNNER_PREFIX-$RC_VERSION-$RUNNER_SUFFIX"
 

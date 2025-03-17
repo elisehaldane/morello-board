@@ -53,6 +53,7 @@ In addition to the GitHub variables mentioned earlier, others were introduced. W
 - `GITHUB_PAT`: a read/write GitHub token for organisation runners
 - `HOST_ID`: a label for the host, appears first in the runner name
 - `HOST_INTERFACE`: the host's ethernet interface ID
+- `RUNNER_LIMIT`: the maximum number of runners to create
 - `RUNNER_PREFIX`: a prefix in the runner name, commonly a project ID
 - `RC_VERSION`: the script version, appears third in the runner name
 
