@@ -151,9 +151,14 @@ configure_act() {
 }
 
 destroy_jails() {
-    # Destroy unwanted jails/pots from the previous session
-    pots=$(pot ls -p -q | grep -i "$RUNNER_PREFIX" | awk '{ print length($0) " " $0; }' - | sort -r -n | cut -d ' ' -f 2- )
-    for clone in $pots; do
+    # Destroy unwanted ephemeral pots from the previous session
+    sysrc gh_actions_pots=""
+    for clone in $(pot ls -p -q | grep -i "ephemeral"); do
+        pot stop -p "$clone" 2>/dev/null
+        pot destroy -p "$clone" -F 2>/dev/null
+    done
+
+    for clone in $(pot ls -p -q | grep -i "$RUNNER_PREFIX"); do
         pot destroy -p "$clone" -F 2>/dev/null
     done
     rm -rdf "$HOME/dsbd-act/runners/*"
